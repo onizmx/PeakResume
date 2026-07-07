@@ -26,10 +26,17 @@ PEAK has no save system. When everyone dies, the run is over and you start again
 | Game version | **1.64.a** (build `20b1c898c`) |
 | Unity scripting backend | **Mono** (`MonoBleedingEdge`, readable `Assembly-CSharp.dll`) |
 | Networking | **Photon PUN** (`PhotonUnityNetworking.dll`) + Steamworks lobby |
-| Mod loader | **BepInEx 5.4.23.2** (Mono x64) |
+| Unity engine | **6000.0.62f1** (Unity 6) |
+| Mod loader | **BepInExPack_PEAK 5.4.75301** (BepInEx 5.4.23.3 + doorstop `4.4.1PEAK`) |
 | Install path | `C:\Program Files (x86)\Steam\steamapps\common\PEAK` |
 
 Mono backend is the good case: game code decompiles to readable C# and Harmony patches apply directly (no IL2CPP interop layer).
+
+> **BepInEx note:** PEAK is Unity 6. The generic `BepInEx_win_x64_5.4.23.2` pack ships an older
+> UnityDoorstop (`winhttp.dll` 4.3.0.0) that **crashes the game at engine startup** (crash inside
+> `WINHTTP!WinHttpWriteProxySettings`, before any managed plugin loads). Use the
+> **[BepInExPack_PEAK](https://thunderstore.io/c/peak/p/BepInEx/BepInExPack_PEAK/)** instead — it
+> carries the PEAK-specific doorstop `4.4.1PEAK` (`winhttp.dll` 4.4.1.0), which is Unity-6 safe.
 
 ## Build
 
