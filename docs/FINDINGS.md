@@ -91,6 +91,36 @@ Two Harmony patches:
 Net effect: a loss now leaves `quicksave.peak` intact, exactly like a voluntary "quit to continue
 later." The player resumes from the last campfire via the native Continue button.
 
+## In-session co-op resume (no rejoin needed)
+
+The obvious worry: the native "Continue" button lives on the main menu and rebuilds the lobby, so
+resuming with friends looks like it needs everyone to leave and re-accept invites. Reading the
+spawn code shows that's avoidable.
+
+Per-player restore is **not** tied to physically reconnecting. In `CharacterSpawner.HostUpdate`
+(line 36631) the host, for each un-spawned player, checks
+`ReconnectHandler.TryGetReconnectData(player, ...)` and, if found, sends `RPC_ReconnectingPlayerSpawn`
+(restoring that player's position, inventory, afflictions). The resume path
+`Quicksave.PopulateMapAndPlayerStates()` (called from `SpawnHostCharacter`, line 36707)
+**seeds those reconnect records for every player from the quicksave**. So the restore is keyed on
+*"the host has your saved record,"* not on *"you left and came back."*
+
+Consequence: any normal run start with `ShouldUseSaveData == true` restores the whole party — the
+host respawns restored (`SpawnHostCharacter`, line 36705) and each friend respawns via
+`RPC_ReconnectingPlayerSpawn`. Ordering is safe: `HostUpdate` spawns the host first (seeding the
+records) before it processes the other players (line 36633–36641).
+
+So instead of the main-menu Continue, we arm the same flag at the moment of **boarding**:
+
+- **Prefix on `AirportCheckInKiosk.LoadIslandMaster`** (host-only; it's an `RpcTarget.MasterClient`
+  RPC) — if `Quicksave.Exists && TryLoadSave()`, set `ShouldUseSaveData = true` before the scene
+  loads. Boarding then continues the saved run instead of generating a fresh one; the whole party
+  is restored at the last campfire without leaving the lobby. `FinalizeRunSetupAndSelfDestruct`
+  clears the flag after the load, so it doesn't linger.
+
+Rule of thumb this creates: **if a saved run exists, boarding the plane continues it.** A win
+already destroyed the save, so ordinary fresh runs board normally. Config: `ResumeOnBoard`.
+
 ### Known limitations (by design, documented for honesty)
 
 - **Checkpoint granularity, not exact death spot.** You resume from the last campfire you lit, not

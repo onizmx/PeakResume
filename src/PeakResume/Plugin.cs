@@ -16,6 +16,7 @@ namespace PeakResume
 
         internal static ManualLogSource Log;
         internal static ConfigEntry<bool> EnableResumeOnDeath;
+        internal static ConfigEntry<bool> ResumeOnBoard;
 
         private void Awake()
         {
@@ -29,10 +30,20 @@ namespace PeakResume
                 "can resume from the last campfire via the main-menu Continue button. A win still " +
                 "clears the save normally.");
 
+            ResumeOnBoard = Config.Bind(
+                "General",
+                "ResumeOnBoard",
+                true,
+                "In-session co-op resume: if a saved run exists, boarding the plane from the airport " +
+                "continues that run (the whole party is restored at the last campfire) instead of " +
+                "starting a fresh one. No one has to leave the lobby or re-accept invites. A win " +
+                "destroys the save, so normal fresh runs are unaffected. Host-authoritative.");
+
             var harmony = new Harmony(PluginGuid);
             harmony.PatchAll(typeof(Plugin).Assembly);
             Log.LogInfo($"{PluginName} {PluginVersion} loaded. Resume-on-death is " +
-                        (EnableResumeOnDeath.Value ? "ENABLED." : "disabled."));
+                        (EnableResumeOnDeath.Value ? "ENABLED" : "disabled") +
+                        $"; resume-on-board is {(ResumeOnBoard.Value ? "ENABLED." : "disabled.")}");
         }
     }
 
@@ -99,6 +110,33 @@ namespace PeakResume
                 return false; // don't run the original: keep quicksave.peak on disk
             }
             return true; // vanilla behaviour
+        }
+    }
+
+    /// <summary>
+    /// In-session co-op resume. LoadIslandMaster runs on the host when someone boards the plane at
+    /// the airport, right before the gameplay scene loads. If a saved run exists, arm the game's own
+    /// resume path (ShouldUseSaveData) so the whole party is restored at the last campfire — the
+    /// host's CharacterSpawner seeds every player's reconnect record from the save and respawns them
+    /// restored, without anyone leaving the lobby. A win has already destroyed the save, so fresh
+    /// runs board normally. Host-only by construction (LoadIslandMaster is an RpcTarget.MasterClient
+    /// call), so we never set the flag on clients (whose local quicksave file is unrelated).
+    /// </summary>
+    [HarmonyPatch(typeof(AirportCheckInKiosk), "LoadIslandMaster")]
+    internal static class Patch_AirportCheckInKiosk_LoadIslandMaster
+    {
+        [HarmonyPrefix]
+        private static void Prefix()
+        {
+            if (!Plugin.ResumeOnBoard.Value)
+                return;
+            if (Quicksave.ShouldUseSaveData)
+                return; // already armed (e.g. native main-menu Continue) — don't double-arm
+            if (Quicksave.Exists && Quicksave.TryLoadSave())
+            {
+                Quicksave.ShouldUseSaveData = true;
+                Plugin.Log.LogInfo("Saved run found — boarding will resume it (whole party restored at the last campfire).");
+            }
         }
     }
 }

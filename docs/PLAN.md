@@ -32,12 +32,23 @@ Native code does all the serialization and restoration — that's why this won't
 - [x] Win still clears the save (wipe detection = every character dead)
 - [x] Config toggle `EnableResumeOnDeath` (default true)
 
+## Phase 2b — In-session co-op resume ✅ (built, not yet play-tested)
+- [x] Patch: `AirportCheckInKiosk.LoadIslandMaster` prefix arms `ShouldUseSaveData` when a save exists
+- [x] Restores the whole party at the last campfire on boarding — no leaving the lobby / re-invites
+- [x] Config toggle `ResumeOnBoard` (default true)
+- Rationale + code map in [FINDINGS.md](FINDINGS.md) ("In-session co-op resume")
+
 ## Phase 3 — Play-test 🔜 (needs the user)
-- [ ] **First launch**: run PEAK once so BepInEx initializes; confirm `PeakResume ... loaded` in the log
-- [ ] Light at least one campfire, then die on purpose as a full-party wipe
-- [ ] Back out to main menu → confirm **Continue** button is present
-- [ ] Continue → confirm you resume at the last campfire with inventory/status intact
-- [ ] Sanity: win a run (or `/` reach a campfire mini-run end) → confirm the save IS cleared (no stale Continue)
+Single-player (✅ confirmed working):
+- [x] First launch: BepInEx loads, `PeakResume ... loaded` in the log
+- [x] Campfire → wipe → main-menu **Continue** → resume at campfire
+Co-op / in-session (needs a friend):
+- [ ] Host + friend, light a campfire, wipe the party
+- [ ] Back at the airport together (no one leaves), host boards the plane
+- [ ] Confirm both players land at the last campfire with their own gear/status restored
+- [ ] Watch log for `Saved run found — boarding will resume it`
+Sanity:
+- [ ] Win a run → save cleared → next boarding is a normal fresh run (no accidental resume)
 
 ## Phase 4 — Harden (after test feedback)
 - [ ] Optional: early autosave so a wipe before the first campfire is still resumable

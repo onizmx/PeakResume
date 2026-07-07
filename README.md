@@ -10,8 +10,19 @@ PEAK has no save system. When everyone dies, the run is over and you start again
 
 ## What it does
 
-- **Save** (hotkey): snapshot the current run — world seed, every player's position, inventory, health, and status effects — to a local JSON file on your machine.
-- **Load** (hotkey): pin the saved seed, rebuild the run, and restore positions/inventory/health in the correct network order so it doesn't desync or crash.
+PEAK already autosaves the whole run at every campfire and can rehydrate it (its "quit to continue
+later" feature) — but it **deletes that save the instant the party wipes**, forcing a restart. This
+mod is small and rides entirely on the game's own save/restore code:
+
+- **Keeps the save on a wipe** (a win still clears it). So a death becomes resumable, exactly like a
+  voluntary quit.
+- **Solo:** resume from the main-menu **Continue** button — back at your last campfire, gear/status intact.
+- **Co-op, in-session:** after a wipe you're all still at the airport together; the host just **boards
+  the plane** and the whole party is restored at the last campfire — no one leaves the lobby, no
+  re-invites. (Config: `ResumeOnBoard`.)
+
+No world-seed reconstruction, no manual teleporting, no Photon-ordering hacks — which is why it
+doesn't crash the way the old unmaintained save mod did.
 
 ## Scope / constraints
 
