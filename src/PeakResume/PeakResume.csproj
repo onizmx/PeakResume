@@ -1,0 +1,66 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <AssemblyName>PeakResume</AssemblyName>
+    <Product>PeakResume</Product>
+    <Version>1.0.0</Version>
+    <LangVersion>latest</LangVersion>
+    <Nullable>disable</Nullable>
+    <!-- We reference the game's own assemblies, which aren't CLS/analyzer-clean. -->
+    <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <NoWarn>$(NoWarn);CS0436</NoWarn>
+
+    <!-- Where PEAK is installed. Override on the command line with -p:GameDir="..." if it moves. -->
+    <GameDir Condition="'$(GameDir)' == ''">C:\Program Files (x86)\Steam\steamapps\common\PEAK</GameDir>
+    <ManagedDir>$(GameDir)\PEAK_Data\Managed</ManagedDir>
+    <BepInExCore>$(GameDir)\BepInEx\core</BepInExCore>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- BepInEx + Harmony (from the installed BepInEx pack). Private=false: don't copy into output. -->
+    <Reference Include="BepInEx">
+      <HintPath>$(BepInExCore)\BepInEx.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="0Harmony">
+      <HintPath>$(BepInExCore)\0Harmony.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+
+    <!-- Game code + Unity. Reference-only, never redistributed. -->
+    <Reference Include="Assembly-CSharp">
+      <HintPath>$(ManagedDir)\Assembly-CSharp.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine">
+      <HintPath>$(ManagedDir)\UnityEngine.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.CoreModule">
+      <HintPath>$(ManagedDir)\UnityEngine.CoreModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <!-- Character derives from MonoBehaviourPun, so its base assembly must be referenced. -->
+    <Reference Include="PhotonUnityNetworking">
+      <HintPath>$(ManagedDir)\PhotonUnityNetworking.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="PhotonRealtime">
+      <HintPath>$(ManagedDir)\PhotonRealtime.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+  <!-- Drop the built plugin straight into the game's plugins folder so testing is just "launch PEAK". -->
+  <Target Name="DeployToGame" AfterTargets="Build">
+    <PropertyGroup>
+      <PluginDeployDir>$(GameDir)\BepInEx\plugins\PeakResume</PluginDeployDir>
+    </PropertyGroup>
+    <MakeDir Directories="$(PluginDeployDir)" />
+    <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(PluginDeployDir)" OverwriteReadOnlyFiles="true" />
+    <Message Importance="high" Text="PeakResume deployed to $(PluginDeployDir)" />
+  </Target>
+
+</Project>

@@ -1,0 +1,19 @@
+# .NET build output
+bin/
+obj/
+*.user
+
+# Decompiled game source — do NOT commit (copyrighted Landfall code, only for reference)
+decompiled/
+
+# Local game DLL references copied in for building (redistribution not ours to make)
+lib/game/
+
+# IDE
+.vs/
+.idea/
+*.suo
+
+# OS
+Thumbs.db
+.DS_Store
