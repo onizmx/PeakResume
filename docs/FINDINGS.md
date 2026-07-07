@@ -121,6 +121,34 @@ So instead of the main-menu Continue, we arm the same flag at the moment of **bo
 Rule of thumb this creates: **if a saved run exists, boarding the plane continues it.** A win
 already destroyed the save, so ordinary fresh runs board normally. Config: `ResumeOnBoard`.
 
+## Checkpoint lifecycle — when the save moves or resets
+
+**Overwritten forward:** every campfire that advances a segment calls `Quicksave.SaveNow()`
+(line 22751), replacing the save with the newer checkpoint.
+
+**Deleted (`DestroySaveData`) at these sites:**
+
+| Line | Trigger | Our handling |
+|---|---|---|
+| 1558 | `RPCEndGame` — win **or** loss | suppress on **loss** only (keep save) |
+| 88737 | `FinalizeRunSetupAndSelfDestruct` — consumes save **on resume** | suppress the file delete, keep the checkpoint (see below) |
+| 19212 | Joining another lobby | keep (intentional) |
+| 48903 | Main-menu "Play" (fresh run) | keep (intentional) |
+| 63673 | Fresh solo session | keep (intentional) |
+| 88678 | `TryLoadSave` version mismatch | keep (intentional) |
+
+### Persist-through-resume (`PersistCheckpoint`)
+
+Vanilla `FinalizeRunSetupAndSelfDestruct` (line 88733) runs `RunManager.SetUpFromQuicksave`, sets
+`timeOfDay`, then `DestroySaveData()` — which deletes the file **and** clears `ShouldUseSaveData`.
+That "self-destruct" means a resumed run has no checkpoint until the next campfire: one retry only.
+
+We prefix/postfix that method to arm `ResumeState.SuppressDestroy` around it, skipping only the file
+deletion, then manually set `ShouldUseSaveData = false` in the postfix (the one side effect we still
+need, so the load doesn't re-trigger). Net: the checkpoint file survives resuming, so repeated wipes
+keep bouncing you back to the same campfire until you light the next one (moves it forward) or win
+(clears it via the unsuppressed `RPCEndGame`).
+
 ### Known limitations (by design, documented for honesty)
 
 - **Checkpoint granularity, not exact death spot.** You resume from the last campfire you lit, not

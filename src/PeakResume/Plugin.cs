@@ -17,6 +17,7 @@ namespace PeakResume
         internal static ManualLogSource Log;
         internal static ConfigEntry<bool> EnableResumeOnDeath;
         internal static ConfigEntry<bool> ResumeOnBoard;
+        internal static ConfigEntry<bool> PersistCheckpoint;
 
         private void Awake()
         {
@@ -39,17 +40,32 @@ namespace PeakResume
                 "starting a fresh one. No one has to leave the lobby or re-accept invites. A win " +
                 "destroys the save, so normal fresh runs are unaffected. Host-authoritative.");
 
+            PersistCheckpoint = Config.Bind(
+                "General",
+                "PersistCheckpoint",
+                true,
+                "Vanilla consumes (deletes) the save the moment you resume it, so you'd only get one " +
+                "retry per campfire. With this on, the checkpoint survives resuming — you can wipe " +
+                "and retry the same campfire as many times as you need. Lighting the next campfire " +
+                "moves the checkpoint forward; winning still clears it.");
+
             var harmony = new Harmony(PluginGuid);
             harmony.PatchAll(typeof(Plugin).Assembly);
-            Log.LogInfo($"{PluginName} {PluginVersion} loaded. Resume-on-death is " +
-                        (EnableResumeOnDeath.Value ? "ENABLED" : "disabled") +
-                        $"; resume-on-board is {(ResumeOnBoard.Value ? "ENABLED." : "disabled.")}");
+            Log.LogInfo($"{PluginName} {PluginVersion} loaded. Resume-on-death={Fmt(EnableResumeOnDeath)}, " +
+                        $"resume-on-board={Fmt(ResumeOnBoard)}, persist-checkpoint={Fmt(PersistCheckpoint)}.");
+        }
+
+        private static string Fmt(ConfigEntry<bool> c)
+        {
+            return c.Value ? "ENABLED" : "disabled";
         }
     }
 
     /// <summary>
-    /// Shared flag: true only while we're inside a *losing* end-game, during which the game's
-    /// automatic Quicksave.DestroySaveData() is suppressed so the last campfire autosave survives.
+    /// Shared flag: while true, the game's Quicksave.DestroySaveData() is skipped. Armed briefly in
+    /// two places — during a *losing* end-game (so the last campfire autosave survives a wipe) and
+    /// during resume finalization (so a resumed checkpoint isn't consumed and can be retried). The
+    /// two windows never overlap (a wipe and a run-start happen at different times).
     /// </summary>
     internal static class ResumeState
     {
@@ -136,6 +152,38 @@ namespace PeakResume
             {
                 Quicksave.ShouldUseSaveData = true;
                 Plugin.Log.LogInfo("Saved run found — boarding will resume it (whole party restored at the last campfire).");
+            }
+        }
+    }
+
+    /// <summary>
+    /// Keep the checkpoint after resuming. Vanilla's FinalizeRunSetupAndSelfDestruct() ends with
+    /// DestroySaveData(), which both deletes quicksave.peak and clears ShouldUseSaveData — so a
+    /// resumed run has no checkpoint until you reach the next campfire (one retry only). We suppress
+    /// just the file deletion for this call, then clear ShouldUseSaveData ourselves (the one side
+    /// effect we still need). The save file stays on disk, so wiping again re-preserves it and you
+    /// can retry the same campfire indefinitely; lighting the next campfire overwrites it forward,
+    /// and a win still clears it via the (unsuppressed) RPCEndGame path.
+    /// </summary>
+    [HarmonyPatch(typeof(Quicksave), "FinalizeRunSetupAndSelfDestruct")]
+    internal static class Patch_Quicksave_FinalizeRunSetupAndSelfDestruct
+    {
+        [HarmonyPrefix]
+        private static void Prefix()
+        {
+            if (Plugin.PersistCheckpoint.Value)
+                ResumeState.SuppressDestroy = true;
+        }
+
+        [HarmonyPostfix]
+        private static void Postfix()
+        {
+            if (ResumeState.SuppressDestroy)
+            {
+                ResumeState.SuppressDestroy = false;
+                // DestroySaveData() was skipped, so do its one still-needed effect: stop re-resuming.
+                Quicksave.ShouldUseSaveData = false;
+                Plugin.Log.LogInfo("Checkpoint preserved through resume — you can retry this campfire as many times as needed.");
             }
         }
     }
