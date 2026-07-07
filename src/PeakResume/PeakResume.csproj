@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk" InitialTargets="CheckGamePaths">
 
   <PropertyGroup>
     <TargetFramework>netstandard2.1</TargetFramework>
@@ -12,11 +12,27 @@
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
     <NoWarn>$(NoWarn);CS0436</NoWarn>
 
-    <!-- Where PEAK is installed. Override on the command line with -p:GameDir="..." if it moves. -->
-    <GameDir Condition="'$(GameDir)' == ''">C:\Program Files (x86)\Steam\steamapps\common\PEAK</GameDir>
+    <!--
+      Where PEAK is installed. If not passed explicitly (-p:GameDir="..."), auto-detect by probing
+      the common Steam library locations. Each candidate is only chosen if its Assembly-CSharp.dll
+      actually exists, so a leftover empty folder won't win. Add your own drive here if needed.
+    -->
+    <GameDir Condition="'$(GameDir)'=='' And Exists('C:\Program Files (x86)\Steam\steamapps\common\PEAK\PEAK_Data\Managed\Assembly-CSharp.dll')">C:\Program Files (x86)\Steam\steamapps\common\PEAK</GameDir>
+    <GameDir Condition="'$(GameDir)'=='' And Exists('C:\Program Files\Steam\steamapps\common\PEAK\PEAK_Data\Managed\Assembly-CSharp.dll')">C:\Program Files\Steam\steamapps\common\PEAK</GameDir>
+    <GameDir Condition="'$(GameDir)'=='' And Exists('D:\SteamLibrary\steamapps\common\PEAK\PEAK_Data\Managed\Assembly-CSharp.dll')">D:\SteamLibrary\steamapps\common\PEAK</GameDir>
+    <GameDir Condition="'$(GameDir)'=='' And Exists('E:\SteamLibrary\steamapps\common\PEAK\PEAK_Data\Managed\Assembly-CSharp.dll')">E:\SteamLibrary\steamapps\common\PEAK</GameDir>
     <ManagedDir>$(GameDir)\PEAK_Data\Managed</ManagedDir>
     <BepInExCore>$(GameDir)\BepInEx\core</BepInExCore>
   </PropertyGroup>
+
+  <!-- Fail early and clearly if we couldn't locate the game or its BepInEx install.
+       Runs via InitialTargets (on the Project element) so it fires before reference resolution. -->
+  <Target Name="CheckGamePaths">
+    <Error Condition="'$(GameDir)'=='' Or !Exists('$(ManagedDir)\Assembly-CSharp.dll')"
+           Text="Could not find your PEAK install. Pass it explicitly, e.g.:%0A  dotnet build src/PeakResume/PeakResume.csproj -c Release -p:GameDir=&quot;D:\path\to\steamapps\common\PEAK&quot;%0A(In Steam: right-click PEAK - Manage - Browse local files to get the path.)" />
+    <Error Condition="!Exists('$(BepInExCore)\BepInEx.dll')"
+           Text="Found PEAK at '$(GameDir)' but no BepInEx there ($(BepInExCore)\BepInEx.dll missing). Install BepInExPack_PEAK first - see Setup Step 2 in README.md." />
+  </Target>
 
   <ItemGroup>
     <!-- BepInEx + Harmony (from the installed BepInEx pack). Private=false: don't copy into output. -->
