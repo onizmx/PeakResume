@@ -54,12 +54,22 @@ cd PeakResume
 > `WINHTTP!WinHttpWriteProxySettings`. The PEAK pack carries a Unity-6-safe doorstop
 > (`winhttp.dll` 4.4.1.0, `.doorstop_version` = `4.4.1PEAK`). This bit us; don't repeat it.
 
-1. Download **BepInExPack_PEAK**: https://thunderstore.io/c/peak/p/BepInEx/BepInExPack_PEAK/
-2. Open the zip, go into the inner `BepInExPack_PEAK/` folder, and copy its **contents**
-   (`BepInEx/`, `winhttp.dll`, `doorstop_config.ini`, `.doorstop_version`) into your PEAK game
-   folder — the one containing `PEAK.exe`.
-3. To find that folder: Steam → right-click **PEAK** → Manage → Browse local files. (Common default:
-   `C:\Program Files (x86)\Steam\steamapps\common\PEAK`.)
+Package page (for reference): https://thunderstore.io/c/peak/p/BepInEx/BepInExPack_PEAK/
+
+**Windows PowerShell — download, extract, and install in one go.** Set `$PEAK` to your game folder
+first (the one with `PEAK.exe`; find it via Steam → right-click PEAK → Manage → Browse local files):
+
+```powershell
+$PEAK = "C:\Program Files (x86)\Steam\steamapps\common\PEAK"   # <-- change if yours differs
+$zip  = "$env:TEMP\BepInExPack_PEAK.zip"
+Invoke-WebRequest "https://thunderstore.io/package/download/BepInEx/BepInExPack_PEAK/5.4.75301/" -OutFile $zip
+Expand-Archive $zip "$env:TEMP\BepInExPack_PEAK" -Force
+# Copy the CONTENTS of the inner BepInExPack_PEAK folder into the game folder:
+Copy-Item "$env:TEMP\BepInExPack_PEAK\BepInExPack_PEAK\*" $PEAK -Recurse -Force
+```
+
+Then confirm it landed: `$PEAK` should now contain `winhttp.dll` (version 4.4.1.0) and a `BepInEx\`
+folder. If a newer pack version exists on Thunderstore, bump the version number in the URL.
 
 ## Step 3 — Build the plugin
 
