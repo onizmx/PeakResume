@@ -65,6 +65,16 @@ Sanity:
   spawn tracking so quicksave resume restores scaled items
 - [ ] Play-test: host a 5+ lobby, verify item counts, wipe → board → resume with scaled items intact
 
+## Phase 6 — Quality of life (v1.2.0 / v1.3.0) ✅ (built, not yet play-tested)
+- [x] `EnableDebugConsole` (default off): flip `DebugUIHandler.AllowOpen` at load — the game ships
+  the whole console but never sets that flag, so F1 does nothing in retail (see FINDINGS.md)
+- [x] `FullHealOnLight` (default on): prefix on `Campfire.Light_Rpc` clears every status/affliction
+  and refills stamina for the whole party; host pushes it via `RPCA_Revive` /
+  `RPC_ApplyStatusesFromFloatArray` / `MoraleBoost` so unmodded clients are healed too
+- [ ] Play-test: light a campfire with a mixed modded/vanilla party, verify everyone's bar clears,
+  then wipe → resume and confirm the checkpoint restored the healed state (heal runs before
+  `Quicksave.SaveNow()`)
+
 ## How to build
 
 ```

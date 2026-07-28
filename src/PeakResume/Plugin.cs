@@ -17,7 +17,7 @@ namespace PeakResume
     {
         public const string PluginGuid = "com.onizmx.peakresume";
         public const string PluginName = "PeakResume";
-        public const string PluginVersion = "1.2.0";
+        public const string PluginVersion = "1.3.0";
 
         /// <summary>The player cap the game ships with; also the party size its item spawns are tuned for.</summary>
         public const int VanillaMaxPlayers = 4;
@@ -29,6 +29,7 @@ namespace PeakResume
         internal static ConfigEntry<int> MaxPlayers;
         internal static ConfigEntry<bool> ScaleItemSpawns;
         internal static ConfigEntry<float> ItemSpawnScale;
+        internal static ConfigEntry<bool> CampfireFullHeal;
         internal static ConfigEntry<bool> EnableDebugConsole;
 
         private void Awake()
@@ -90,6 +91,17 @@ namespace PeakResume
                     "(10 players => 2.5x items), 0.5 = half as strong (10 players => 1.75x), 0 = off.",
                     new AcceptableValueRange<float>(0f, 2f)));
 
+            CampfireFullHeal = Config.Bind(
+                "Campfire",
+                "FullHealOnLight",
+                true,
+                "Lighting a campfire fully heals the whole party, wherever they are: every affliction " +
+                "(injury, hunger, cold, poison, drowsy, curse, spores, webs, thorns) is cleared and " +
+                "the stamina bar is refilled. Vanilla only gives a small extra-stamina morale boost " +
+                "and shaves 20% off the lighter's injury. Host-driven through the game's own RPCs, so " +
+                "party members without the mod get healed too. Dead players are skipped — they still " +
+                "respawn at a statue as usual.");
+
             EnableDebugConsole = Config.Bind(
                 "Debug",
                 "EnableDebugConsole",
@@ -111,7 +123,7 @@ namespace PeakResume
             Log.LogInfo($"{PluginName} {PluginVersion} loaded. Resume-on-death={Fmt(EnableResumeOnDeath)}, " +
                         $"resume-on-board={Fmt(ResumeOnBoard)}, persist-checkpoint={Fmt(PersistCheckpoint)}, " +
                         $"max-players={MaxPlayers.Value}, scale-item-spawns={Fmt(ScaleItemSpawns)} (x{ItemSpawnScale.Value:0.##}), " +
-                        $"debug-console={Fmt(EnableDebugConsole)}.");
+                        $"campfire-full-heal={Fmt(CampfireFullHeal)}, debug-console={Fmt(EnableDebugConsole)}.");
         }
 
         private static string Fmt(ConfigEntry<bool> c)
@@ -263,6 +275,90 @@ namespace PeakResume
         private static void Postfix(ref int __result)
         {
             __result = Plugin.MaxPlayers.Value;
+        }
+    }
+
+    /// <summary>
+    /// Full heal when a campfire is lit. Vanilla hands out a small morale boost (extra stamina) and
+    /// shaves 20% off the lighter's Injury; this clears every status and affliction for the whole
+    /// party and refills the bar.
+    ///
+    /// Prefix, not postfix: Light_Rpc ends with Quicksave.SaveNow(), so healing first means the
+    /// checkpoint records a healed party — resuming brings everyone back healed instead of broken.
+    ///
+    /// Light_Rpc is an RpcTarget.All call, so this runs on every client: each one heals its own
+    /// character, which is the only side allowed to write it (SetStatus/AddStamina and friends are
+    /// all photonView.IsMine-guarded). The host then pushes the same heal to everyone else through
+    /// the game's own RPCs, so party members *without* the mod are healed as well:
+    /// RPCA_Revive(false) clears statuses, afflictions and thorns (false = skip the post-revive
+    /// Curse/Hunger penalty), a zeroing status delta takes care of Curse (RPCA_Revive's
+    /// ClearAllStatus excludes it), and MoraleBoost fills the owner's extra-stamina bar — the main
+    /// bar has no RPC, but it regenerates on its own once the statuses capping it are gone.
+    ///
+    /// Only a deliberate lighting counts: updateSegment is true just for Interact_CastFinished and
+    /// DebugLight. The late-join sync and MapHandler's LightWithoutReveal pass false, so a resumed
+    /// run doesn't hand out a free heal for the campfire it restores.
+    /// </summary>
+    [HarmonyPatch(typeof(Campfire), "Light_Rpc")]
+    internal static class Patch_Campfire_Light_Rpc
+    {
+        [HarmonyPrefix]
+        private static void Prefix(bool updateSegment)
+        {
+            if (!Plugin.CampfireFullHeal.Value || !updateSegment)
+                return;
+
+            HealSelf();
+            if (PhotonNetwork.InRoom && PhotonNetwork.IsMasterClient)
+                HealEveryoneElse();
+        }
+
+        private static void HealSelf()
+        {
+            Character me = Character.localCharacter;
+            if (me == null || me.data == null || me.data.dead)
+                return;
+
+            me.refs.afflictions.ClearAllStatus(excludeCurse: false);
+            me.refs.afflictions.ClearAllAfflictions();
+            me.refs.afflictions.RemoveAllThorns();
+            me.AddStamina(1f);      // clamps to max stamina, which is a full bar now the statuses are gone
+            me.SetExtraStamina(1f);
+            Plugin.Log.LogInfo("Campfire lit — fully healed.");
+        }
+
+        private static void HealEveryoneElse()
+        {
+            var all = Character.AllCharacters;
+            if (all == null)
+                return;
+
+            int healed = 0;
+            foreach (var c in all)
+            {
+                if (c == null || c.IsLocal || c.data == null || c.data.dead)
+                    continue; // dead players respawn at a statue; reviving them in place would bypass that
+
+                c.photonView.RPC("RPCA_Revive", RpcTarget.All, false);
+
+                // RPCA_Revive's ClearAllStatus() keeps Curse. RPC_ApplyStatusesFromFloatArray applies
+                // per-status deltas and trusts the master client, so send a big negative Curse delta;
+                // SubtractStatus clamps at zero, so overshooting is safe even if our copy is stale.
+                var statuses = c.refs.afflictions.currentStatuses;
+                if (statuses != null && statuses.Length > (int)CharacterAfflictions.STATUSTYPE.Curse)
+                {
+                    var deltas = new float[statuses.Length];
+                    deltas[(int)CharacterAfflictions.STATUSTYPE.Curse] = -1f;
+                    c.photonView.RPC("RPC_ApplyStatusesFromFloatArray", c.photonView.Owner, deltas);
+                }
+
+                // No RPC exists for the main stamina bar, so top up the extra bar instead.
+                c.photonView.RPC("MoraleBoost", c.photonView.Owner, 1f, 1);
+                healed++;
+            }
+
+            if (healed > 0)
+                Plugin.Log.LogInfo($"Campfire lit — pushed a full heal to {healed} other player(s).");
         }
     }
 

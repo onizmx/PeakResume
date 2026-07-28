@@ -270,3 +270,60 @@ Reading this path answered a play question, so it's worth recording. Hanging **d
 - `ShittyPiton` starts cracking after a random 1–5 s of hang time and breaks after 4 cracks.
 
 None of this is affected by any PeakResume patch.
+
+---
+
+## Campfire full heal (v1.3.0: `Campfire/FullHealOnLight`)
+
+### What vanilla does when a fire lights
+
+`Campfire.Update()`'s one-shot `!fireHasStarted` block (line ~130):
+
+- `MoraleBoost.SpawnMoraleBoost(pos, moraleBoostRadius, moraleBoostBaseline, ..., sendToAll: false,
+  minScouts: 2)` — a small **extra**-stamina top-up (`Character.AddExtraStamina`) for scouts inside
+  the radius, and only if at least two are there.
+- `AdjustStatus(Injury, -0.2f)` on the local character, if it's within the radius.
+
+Plus, while you stay near a lit fire, `ApplyCampfireProtection()` applies a no-hunger buff. Nothing
+touches the main stamina bar or the other statuses.
+
+### Where the mod hooks
+
+`Campfire.Light_Rpc(bool updateSegment, float burningFor)` — the `[PunRPC]` every client runs when a
+fire lights. Two details make it the right hook:
+
+- **`updateSegment` separates real lightings from bookkeeping.** It's `true` only from
+  `Interact_CastFinished` (a player finished the light interaction) and `DebugLight()`. The
+  late-join sync (`CheckIfSyncNeeded`) and `MapHandler`'s `LightWithoutReveal()` — which re-lights
+  the previous campfire when a segment is restored — both pass `false`. Gating on it means a
+  **resumed run doesn't hand out a free heal** for the checkpoint fire it relights.
+- **`Quicksave.SaveNow()` is the last line of the method** (under the same `updateSegment` guard).
+  So the patch is a **prefix**: heal first, and the checkpoint records the healed party. Resume then
+  restores everyone healed rather than in whatever state they arrived.
+
+### Healing players you don't own
+
+Every stamina/status writer is `photonView.IsMine`-guarded (`Character.AddStamina`,
+`SetExtraStamina`, `CharacterAfflictions.SetStatus`), so a client can only heal itself. Since
+`Light_Rpc` runs everywhere, each modded client heals its own character directly.
+
+For party members *without* the mod, the host drives the game's own RPCs:
+
+| RPC | Effect | Why it's callable |
+|---|---|---|
+| `RPCA_Revive(false)` | `ClearAllStatus()` + `ClearAllAfflictions()` + `RemoveAllThorns()`, and clears `dead`/`passedOut` | `[PunRPC]` on `Character` with no sender check; `false` skips `ApplyPostReviveStatus` (which would re-add Curse 0.05 + Hunger 0.3) |
+| `RPC_ApplyStatusesFromFloatArray(deltas)` | Applies per-status deltas | `[PunRPC]`, explicitly gated on `info.Sender.IsMasterClient` — exists for exactly this kind of host authority |
+| `MoraleBoost(1f, 1)` | `AddExtraStamina(1f)` on the owner | `[PunRPC]`; sent to the owner only, so their bar animation plays once |
+
+Curse needs the second RPC: `RPCA_Revive` calls `ClearAllStatus()` with its default
+`excludeCurse: true`. `STATUSTYPE.Curse` is index 5, and `ApplyStatusesFromFloatArray` skips only
+indices 7 (`Weight`) and 9 (`Thorns`), so a `-1f` at index 5 gets through. `SubtractStatus` clamps
+at zero, so overshooting is safe even if the host's synced copy of that player's statuses is stale.
+
+The main stamina bar has no RPC at all, so unmodded clients get the extra bar filled instead; their
+white bar then refills on its own at 0.2/s now that nothing caps it (`GetMaxStamina()` is
+`1 - statusSum`).
+
+**Dead players are skipped.** `RPCA_Revive` clears `data.dead` but doesn't move anyone, so reviving
+a corpse would stand it up wherever it fell, bypassing the statue respawn the game routes deaths
+through. They resurrect the normal way.
