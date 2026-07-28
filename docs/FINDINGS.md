@@ -3,6 +3,15 @@
 Decompiled from `Assembly-CSharp.dll`, game **v1.64.a**. Line numbers refer to the single-file
 decompile under `decompiled/` (gitignored). This is the design basis for the mod.
 
+> **Re-verified against v1.65.a (Steam build 24347206, 2026-07-29).** Every patched method —
+> `Character.RPCEndGame`, `Quicksave.DestroySaveData` / `FinalizeRunSetupAndSelfDestruct`,
+> `AirportCheckInKiosk.LoadIslandMaster`, `NetworkingUtilities.MAX_PLAYERS`,
+> `Spawner.GetSpawnSpots` — is byte-identical to 1.64.a. One relevant addition: 1.65.a introduces
+> a **seventh `DestroySaveData()` call site** in `RunManager.StartRun`, which deletes a
+> **non-host's** local quicksave when a run starts (stale client-side copy cleanup). It never runs
+> on the host — whose save is the one that drives resume — and it sits outside both of our
+> suppression windows, so the mod is unaffected. See the call-site tables below.
+
 ## TL;DR
 
 PEAK **already has a complete save-and-resume system** — it's the "quit now, continue later"
@@ -76,6 +85,7 @@ you restart from the beach.
 | 63673 | Starting a fresh solo session (user confirmed) | keep |
 | 88678 | `TryLoadSave` version mismatch | keep |
 | 88737 | `FinalizeRunSetupAndSelfDestruct` after a successful load | keep |
+| (1.65.a) | `RunManager.StartRun` — non-host local-save cleanup at run start | keep (never runs on the host) |
 
 ## The mod
 
@@ -136,6 +146,7 @@ already destroyed the save, so ordinary fresh runs board normally. Config: `Resu
 | 48903 | Main-menu "Play" (fresh run) | keep (intentional) |
 | 63673 | Fresh solo session | keep (intentional) |
 | 88678 | `TryLoadSave` version mismatch | keep (intentional) |
+| (1.65.a) | `RunManager.StartRun` — deletes a **non-host's** local save at run start | keep (host-side save is untouched; outside both suppression windows) |
 
 ### Persist-through-resume (`PersistCheckpoint`)
 
@@ -148,6 +159,56 @@ deletion, then manually set `ShouldUseSaveData = false` in the postfix (the one 
 need, so the load doesn't re-trigger). Net: the checkpoint file survives resuming, so repeated wipes
 keep bouncing you back to the same campfire until you light the next one (moves it forward) or win
 (clears it via the unsuppressed `RPCEndGame`).
+
+## Bigger parties (v1.1.0): `MaxPlayers` + `ScaleItemSpawns`
+
+Class/method references below are to the PeakStudy per-type decompile (Steam build 23871350), not
+this repo's older single-file line numbers.
+
+### The 4-player cap is one getter
+
+`Peak.Network.NetworkingUtilities.MAX_PLAYERS => 4` is the only cap in the codebase. Both readers
+run **host-side at room creation**: `HostRoomOptions()` (Photon `RoomOptions.MaxPlayers`) and
+`SteamLobbyAPI.CreateLobby` (Steam lobby size). One postfix on the getter raises both; joining
+clients never check it, so only the host needs the mod.
+
+Everything that touches per-player state was audited for a hardcoded 4. All of it degrades
+gracefully past 4 — guards, modulo, or list-based code — never an exception:
+
+| Site | 4 is... | Past 4 |
+|---|---|---|
+| `SpawnPoint.GetSpawnPoint` | scene spawn points | index wraps via modulo — players share spots |
+| `EndScreen` timeline / scout windows | scene-authored UI arrays | `< scouts.Length` guards → 4 shown |
+| `PeakHandler` summit cutscene | 4 stand-in models | 4 shown |
+| `PlayerHandler.AssignMixerGroup` | 4 voice mixer groups | returns `byte.MaxValue`, guarded → voice plays without per-player effects |
+| `AudioLevels` pause-menu rows | 4 slider/kick rows | `sliders.Count > j` guard → no row |
+| Quicksave / ReconnectHandler | — | List/Dictionary-based, no cap |
+
+Real-world constraint: `CharacterSyncer` streams ~33–41 B per player at 30 Hz; the room's message
+volume grows roughly quadratically with player count, so expect lag past ~6–8 players (Photon's
+per-room guideline is what the 4-cap was protecting).
+
+### Item quantity is "one item per scene-authored spawn spot"
+
+`Spawner.SpawnItems` spawns exactly one item per Transform in the list returned by the **virtual**
+`Spawner.GetSpawnSpots()` — and `Luggage`/`RespawnChest` (the main item sources) funnel through the
+same method. So a postfix that appends offset clones of existing spots scales the whole pipeline:
+pool selection (`GetObjectsToSpawn(count)`), instantiation, and spawn tracking.
+
+Why this is resume-safe: `TrySpawnItems` calls `tracker.TrackSpawnedItems(list)` **after** spawning,
+so scaled items enter the quicksave's `spawnHistory`; on resume, `SpawnAndTrackFromItemHistory()`
+replays the history and never calls `GetSpawnSpots`, so nothing double-scales. Host-only by
+construction (`SpawnItems` early-outs on non-masters). Cloned spots get a ~0.25 m offset because
+items spawn kinematic (`SetKinematicRPC`) and would otherwise overlap.
+
+Deliberately not scaled:
+
+| Source | Why |
+|---|---|
+| Pre-placed scene items (`DestroyBasedOnPlayerCount`) | Scenes hold the 4-player max and *delete down* for smaller parties; with >4 everything already survives. Adding more means cloning networked scene objects — not worth the risk. |
+| `SingleItemSpawner` | Single by design (special placements); tracking is internal to its method. |
+| `BerryVine` | Overrides `GetSpawnSpots` (spots from its own colliders) and rolls its own count from `possibleBerries`. |
+| `FakeItem` world pickups | Not networked objects — synced as a scene-index list. Adding instances breaks index sync and late-join. |
 
 ### Known limitations (by design, documented for honesty)
 

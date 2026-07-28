@@ -19,6 +19,13 @@ it **deletes that save the instant the party wipes**, forcing a restart. This mo
   as many times as you need. Lighting the next campfire moves the checkpoint up; reaching the Peak
   clears it.
 
+Since 1.1.0 it also grows the party:
+
+- **Up to 10 players** (configurable, default 10) instead of the hardcoded 4. Only the host needs
+  the mod — the cap is baked into the lobby when it's created.
+- **Item spawns scale with party size.** Luggage and ground spawners produce proportionally more
+  items past 4 players (also configurable).
+
 Solo works too — resume from the main-menu **Continue** button, or just board again.
 
 No world-seed math, no manual teleporting, no network-ordering hacks — that's why it doesn't crash
@@ -94,7 +101,7 @@ dotnet build src/PeakResume/PeakResume.csproj -c Release -p:GameDir="D:\Games\St
 Launch PEAK once. Open `PEAK\BepInEx\LogOutput.log` and look for:
 
 ```
-PeakResume 1.0.0 loaded. Resume-on-death=ENABLED, resume-on-board=ENABLED, persist-checkpoint=ENABLED.
+PeakResume 1.1.0 loaded. Resume-on-death=ENABLED, resume-on-board=ENABLED, persist-checkpoint=ENABLED, max-players=10, scale-item-spawns=ENABLED (x1).
 ```
 
 If the game **crashes at startup instead of reaching the menu**, you almost certainly used generic
@@ -115,13 +122,16 @@ resume it`, `Checkpoint preserved through resume`.
 
 ## Config
 
-Generated at `PEAK\BepInEx\config\com.onizmx.peakresume.cfg` after the first launch. All default on:
+Generated at `PEAK\BepInEx\config\com.onizmx.peakresume.cfg` after the first launch.
 
-| Setting | What it does |
-|---|---|
-| `EnableResumeOnDeath` | Keep the save on a party wipe (the core feature). |
-| `ResumeOnBoard` | Boarding the plane resumes a saved run (in-session co-op resume). |
-| `PersistCheckpoint` | Keep the checkpoint after resuming, for unlimited retries. |
+| Setting | Default | What it does |
+|---|---|---|
+| `EnableResumeOnDeath` | on | Keep the save on a party wipe (the core feature). |
+| `ResumeOnBoard` | on | Boarding the plane resumes a saved run (in-session co-op resume). |
+| `PersistCheckpoint` | on | Keep the checkpoint after resuming, for unlimited retries. |
+| `MaxPlayers` | 10 | Lobby size (vanilla hardcodes 4). Host-side; set before hosting. |
+| `ScaleItemSpawns` | on | More than 4 players → proportionally more items from luggage/spawners. |
+| `ItemSpawnScale` | 1.0 | Scaling strength: 1.0 = fully proportional (10 players → 2.5× items). |
 
 ## Limitations
 
@@ -129,6 +139,11 @@ Generated at `PEAK\BepInEx\config\com.onizmx.peakresume.cfg` after the first lau
 - **Dying before the first campfire** restarts from the beginning (no save exists yet).
 - **No map-altering mods** (MorePeak, etc.). Resume replays the game's saved run state, which assumes
   vanilla generation and spawn tracking.
+- **Past 4 players some things stay 4-wide** (by the game's design, all cosmetic): the end-screen
+  timeline and the summit cutscene show 4 scouts, the pause menu has 4 volume/kick rows, and voices
+  past the 4th lose per-player effects (still audible). Item scaling covers luggage and ground
+  spawners; pre-placed scene items stay at their 4-player amounts, and expect some extra network lag
+  past ~6 players — the game's sync traffic was budgeted for 4.
 - If PEAK updates, the mod may need a rebuild (`dotnet build ...`) against the new game DLLs.
 
 ---
@@ -136,11 +151,12 @@ Generated at `PEAK\BepInEx\config\com.onizmx.peakresume.cfg` after the first lau
 ## Scope / environment
 
 - **Host-authoritative.** Only the host's actions drive save/resume; clients are restored by the host.
-- Confirmed against PEAK **1.64.a**, Unity **6000.0.62f1** (Mono backend), Photon PUN networking,
-  BepInExPack_PEAK **5.4.75301** (BepInEx 5.4.23.3 + doorstop `4.4.1PEAK`).
+- Confirmed against PEAK **1.65.a** (Steam build 24347206; originally built against 1.64.a — the
+  update left every patched method untouched), Unity **6000.0.62f1** (Mono backend), Photon PUN
+  networking, BepInExPack_PEAK **5.4.75301** (BepInEx 5.4.23.3 + doorstop `4.4.1PEAK`).
 
 ## How it works / auditing
 
-The mod is four small Harmony patches over the game's own methods. The full technical map — exact
+The mod is six small Harmony patches over the game's own methods. The full technical map — exact
 classes, methods, line numbers, and the reasoning behind each patch — is in
 [docs/FINDINGS.md](docs/FINDINGS.md). Plan and status: [docs/PLAN.md](docs/PLAN.md).
