@@ -33,6 +33,9 @@ Since 1.3.0, campfires actually restore you:
   are standing. Vanilla only gives a small extra-stamina morale boost and shaves 20% off the
   lighter's injury. It runs through the game's own RPCs from the host, so **party members without
   the mod get healed too**. Dead players are skipped — they still respawn at a statue.
+- **Revives bring you back at full** (1.4.0). Vanilla stamps Curse 0.05 + Hunger 0.3 on anyone it
+  revives — statue, revive chest, skeleton, base camp respawn, and the resume spawn — so you get up
+  already halfway to passing out. That penalty is dropped and the bar is filled.
 
 Solo works too — resume from the main-menu **Continue** button, or just board again.
 
@@ -109,7 +112,7 @@ dotnet build src/PeakResume/PeakResume.csproj -c Release -p:GameDir="D:\Games\St
 Launch PEAK once. Open `PEAK\BepInEx\LogOutput.log` and look for:
 
 ```
-PeakResume 1.3.0 loaded. Resume-on-death=ENABLED, resume-on-board=ENABLED, persist-checkpoint=ENABLED, max-players=10, scale-item-spawns=ENABLED (x1), campfire-full-heal=ENABLED, debug-console=disabled.
+PeakResume 1.4.0 loaded. Resume-on-death=ENABLED, resume-on-board=ENABLED, persist-checkpoint=ENABLED, max-players=10, scale-item-spawns=ENABLED (x1), campfire-full-heal=ENABLED, revive-full-heal=ENABLED, debug-console=disabled.
 ```
 
 If the game **crashes at startup instead of reaching the menu**, you almost certainly used generic
@@ -141,6 +144,7 @@ Generated at `PEAK\BepInEx\config\com.onizmx.peakresume.cfg` after the first lau
 | `ScaleItemSpawns` | on | More than 4 players → proportionally more items from luggage/spawners. |
 | `ItemSpawnScale` | 1.0 | Scaling strength: 1.0 = fully proportional (10 players → 2.5× items). |
 | `FullHealOnLight` | on | Lighting a campfire fully heals the whole party (see above). |
+| `FullHealOnRevive` | on | Revives skip the vanilla Curse/Hunger penalty and refill stamina. |
 | `EnableDebugConsole` | off | Unlock PEAK's built-in developer console (F1). See below. |
 
 ## Debug console (optional, off by default)
@@ -182,6 +186,6 @@ it's unreachable in the retail build. Set `EnableDebugConsole = true` in the con
 
 ## How it works / auditing
 
-The mod is seven small Harmony patches over the game's own methods. The full technical map — exact
+The mod is nine small Harmony patches over the game's own methods. The full technical map — exact
 classes, methods, line numbers, and the reasoning behind each patch — is in
 [docs/FINDINGS.md](docs/FINDINGS.md). Plan and status: [docs/PLAN.md](docs/PLAN.md).

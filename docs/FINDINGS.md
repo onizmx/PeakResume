@@ -327,3 +327,41 @@ white bar then refills on its own at 0.2/s now that nothing caps it (`GetMaxStam
 **Dead players are skipped.** `RPCA_Revive` clears `data.dead` but doesn't move anyone, so reviving
 a corpse would stand it up wherever it fell, bypassing the statue respawn the game routes deaths
 through. They resurrect the normal way.
+
+---
+
+## Revive penalty (v1.4.0: `Revive/FullHealOnRevive`)
+
+Every revive in the game ends up in `Character.RPCA_Revive(bool applyStatus)` — which does clear
+everything (`ClearAllStatus()`, `ClearAllAfflictions()`, `RemoveAllThorns()`, and the `dead` /
+`passedOut` flags) — and then, when `applyStatus` is true, calls:
+
+```csharp
+public static void ApplyPostReviveStatus(CharacterAfflictions afflictions)
+{
+    afflictions.AddStatus(STATUSTYPE.Curse, 0.05f, fromRPC: true);
+    afflictions.AddStatus(STATUSTYPE.Hunger, 0.3f, fromRPC: true);
+}
+```
+
+That's why a revived scout gets up with a third of the bar already eaten. Who passes `true`:
+
+| Caller | Path |
+|---|---|
+| `RespawnChest.RespawnAllPlayersHere` | the revive chest, revives everyone dead or downed |
+| `CharacterSpawner` (two sites) | base camp respawn / "spawn and revive" |
+| `Skelleton` | reviving the skeleton a dead scout leaves behind |
+| `CharacterSpawner` (direct call, line ~315) | **the reconnect/resume spawn** — so PeakResume's own resume was handing everyone Hunger 0.3 on arrival |
+
+(`RespawnRandomScout` and `ScoutEffigy` already pass `false` — the game itself treats the penalty as
+optional.)
+
+Since all of them funnel through that one static method, a prefix returning `false` covers every
+path at once. Stamina is topped up separately in a postfix on `RPCA_Revive`, which nothing else
+refills.
+
+Same client/host split as the campfire heal: the prefix only exists on modded clients, so a vanilla
+player still stamps the penalty on their own character. The host repairs it from its `RPCA_Revive`
+postfix with a negative Curse/Hunger delta through `RPC_ApplyStatusesFromFloatArray` (master-gated)
+plus a `MoraleBoost` for the extra-stamina bar. Ordering is safe: the host only sends that after the
+server has already relayed the revive to everyone.

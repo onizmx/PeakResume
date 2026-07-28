@@ -17,7 +17,7 @@ namespace PeakResume
     {
         public const string PluginGuid = "com.onizmx.peakresume";
         public const string PluginName = "PeakResume";
-        public const string PluginVersion = "1.3.0";
+        public const string PluginVersion = "1.4.0";
 
         /// <summary>The player cap the game ships with; also the party size its item spawns are tuned for.</summary>
         public const int VanillaMaxPlayers = 4;
@@ -30,6 +30,7 @@ namespace PeakResume
         internal static ConfigEntry<bool> ScaleItemSpawns;
         internal static ConfigEntry<float> ItemSpawnScale;
         internal static ConfigEntry<bool> CampfireFullHeal;
+        internal static ConfigEntry<bool> FullHealOnRevive;
         internal static ConfigEntry<bool> EnableDebugConsole;
 
         private void Awake()
@@ -102,6 +103,16 @@ namespace PeakResume
                 "party members without the mod get healed too. Dead players are skipped — they still " +
                 "respawn at a statue as usual.");
 
+            FullHealOnRevive = Config.Bind(
+                "Revive",
+                "FullHealOnRevive",
+                true,
+                "Come back from a revive at full instead of pre-crippled. Vanilla re-applies Curse " +
+                "0.05 + Hunger 0.3 to anyone it revives (scout statue, revive chest, skeleton, base " +
+                "camp respawn — and the resume spawn too); this drops that penalty and fills the " +
+                "stamina bar. Host-driven for the party, like the campfire heal, so members without " +
+                "the mod get it as well.");
+
             EnableDebugConsole = Config.Bind(
                 "Debug",
                 "EnableDebugConsole",
@@ -123,7 +134,8 @@ namespace PeakResume
             Log.LogInfo($"{PluginName} {PluginVersion} loaded. Resume-on-death={Fmt(EnableResumeOnDeath)}, " +
                         $"resume-on-board={Fmt(ResumeOnBoard)}, persist-checkpoint={Fmt(PersistCheckpoint)}, " +
                         $"max-players={MaxPlayers.Value}, scale-item-spawns={Fmt(ScaleItemSpawns)} (x{ItemSpawnScale.Value:0.##}), " +
-                        $"campfire-full-heal={Fmt(CampfireFullHeal)}, debug-console={Fmt(EnableDebugConsole)}.");
+                        $"campfire-full-heal={Fmt(CampfireFullHeal)}, revive-full-heal={Fmt(FullHealOnRevive)}, " +
+                        $"debug-console={Fmt(EnableDebugConsole)}.");
         }
 
         private static string Fmt(ConfigEntry<bool> c)
@@ -359,6 +371,65 @@ namespace PeakResume
 
             if (healed > 0)
                 Plugin.Log.LogInfo($"Campfire lit — pushed a full heal to {healed} other player(s).");
+        }
+    }
+
+    /// <summary>
+    /// Drop the vanilla revive penalty. Every revive path (scout statue, revive chest, skeleton,
+    /// base camp respawn, and the resume spawn in CharacterSpawner) funnels through this one method,
+    /// which re-applies Curse 0.05 + Hunger 0.3 — so you come back already halfway to passing out.
+    /// Skipping it is a single prefix that covers all of them.
+    /// </summary>
+    [HarmonyPatch(typeof(Character), nameof(Character.ApplyPostReviveStatus))]
+    internal static class Patch_Character_ApplyPostReviveStatus
+    {
+        [HarmonyPrefix]
+        private static bool Prefix()
+        {
+            return !Plugin.FullHealOnRevive.Value; // false = don't run the original
+        }
+    }
+
+    /// <summary>
+    /// Fill the bar on revive. RPCA_Revive (reached directly or via RPCA_ReviveAtPosition) already
+    /// clears statuses, afflictions and thorns, but nothing refills stamina, so a revived scout can
+    /// stand up with an empty bar.
+    ///
+    /// It's an RpcTarget.All call, so every client runs it: each fills its own character, the only
+    /// one it may write. The host then repairs anyone still running vanilla — their client applied
+    /// the Curse/Hunger penalty locally (the prefix above only exists on modded clients), so undo it
+    /// with a master-authoritative status delta and top up the extra-stamina bar. The correction is
+    /// sent while handling the revive that the server already relayed, so it lands after it.
+    /// </summary>
+    [HarmonyPatch(typeof(Character), "RPCA_Revive")]
+    internal static class Patch_Character_RPCA_Revive
+    {
+        [HarmonyPostfix]
+        private static void Postfix(Character __instance)
+        {
+            if (!Plugin.FullHealOnRevive.Value || __instance == null || __instance.refs == null)
+                return;
+
+            if (__instance.IsLocal)
+            {
+                __instance.AddStamina(1f);
+                __instance.SetExtraStamina(1f);
+                Plugin.Log.LogInfo("Revived at full — no revive penalty applied.");
+                return;
+            }
+
+            if (!PhotonNetwork.InRoom || !PhotonNetwork.IsMasterClient)
+                return;
+
+            var statuses = __instance.refs.afflictions.currentStatuses;
+            if (statuses != null && statuses.Length > (int)CharacterAfflictions.STATUSTYPE.Curse)
+            {
+                var deltas = new float[statuses.Length];
+                deltas[(int)CharacterAfflictions.STATUSTYPE.Curse] = -1f;
+                deltas[(int)CharacterAfflictions.STATUSTYPE.Hunger] = -1f;
+                __instance.photonView.RPC("RPC_ApplyStatusesFromFloatArray", __instance.photonView.Owner, deltas);
+            }
+            __instance.photonView.RPC("MoraleBoost", __instance.photonView.Owner, 1f, 1);
         }
     }
 

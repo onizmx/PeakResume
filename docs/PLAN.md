@@ -71,9 +71,13 @@ Sanity:
 - [x] `FullHealOnLight` (default on): prefix on `Campfire.Light_Rpc` clears every status/affliction
   and refills stamina for the whole party; host pushes it via `RPCA_Revive` /
   `RPC_ApplyStatusesFromFloatArray` / `MoraleBoost` so unmodded clients are healed too
+- [x] `FullHealOnRevive` (default on): prefix on `Character.ApplyPostReviveStatus` drops the vanilla
+  Curse 0.05 + Hunger 0.3 stamp (covers statue, revive chest, skeleton, base camp *and* the resume
+  spawn in one hook); postfix on `RPCA_Revive` refills stamina, host repairs unmodded clients
 - [ ] Play-test: light a campfire with a mixed modded/vanilla party, verify everyone's bar clears,
   then wipe → resume and confirm the checkpoint restored the healed state (heal runs before
   `Quicksave.SaveNow()`)
+- [ ] Play-test: die → revive at a statue/chest and confirm the bar is full with no curse/hunger
 
 ## How to build
 
