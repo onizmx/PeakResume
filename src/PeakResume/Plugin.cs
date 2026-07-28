@@ -8,6 +8,7 @@ using Peak; // Peak.Quicksave
 using Peak.Network; // NetworkingUtilities.MAX_PLAYERS
 using Photon.Pun;
 using UnityEngine;
+using Zorro.Core.CLI; // DebugUIHandler
 
 namespace PeakResume
 {
@@ -16,7 +17,7 @@ namespace PeakResume
     {
         public const string PluginGuid = "com.onizmx.peakresume";
         public const string PluginName = "PeakResume";
-        public const string PluginVersion = "1.1.0";
+        public const string PluginVersion = "1.2.0";
 
         /// <summary>The player cap the game ships with; also the party size its item spawns are tuned for.</summary>
         public const int VanillaMaxPlayers = 4;
@@ -28,6 +29,7 @@ namespace PeakResume
         internal static ConfigEntry<int> MaxPlayers;
         internal static ConfigEntry<bool> ScaleItemSpawns;
         internal static ConfigEntry<float> ItemSpawnScale;
+        internal static ConfigEntry<bool> EnableDebugConsole;
 
         private void Awake()
         {
@@ -88,11 +90,28 @@ namespace PeakResume
                     "(10 players => 2.5x items), 0.5 = half as strong (10 players => 1.75x), 0 = off.",
                     new AcceptableValueRange<float>(0f, 2f)));
 
+            EnableDebugConsole = Config.Bind(
+                "Debug",
+                "EnableDebugConsole",
+                false,
+                "Unlock PEAK's built-in developer console (press F1 in game). The console UI and its " +
+                "commands ship in the retail build, but DebugUIHandler.AllowOpen — the one flag that " +
+                "lets F1 open it — is never set by the game, so it's unreachable. This sets it. " +
+                "Commands act on your own character only (GainFullStamina, ClearAll, WarpToSpawn, ...). " +
+                "Leave off for normal play.");
+
+            // Static flag, read every frame in DebugUIHandler.Update(); nothing in the game ever
+            // clears it, so setting it once here is enough. The handler itself is always present
+            // (GameHandler registers debug pages on it unconditionally at startup).
+            if (EnableDebugConsole.Value)
+                DebugUIHandler.AllowOpen = true;
+
             var harmony = new Harmony(PluginGuid);
             harmony.PatchAll(typeof(Plugin).Assembly);
             Log.LogInfo($"{PluginName} {PluginVersion} loaded. Resume-on-death={Fmt(EnableResumeOnDeath)}, " +
                         $"resume-on-board={Fmt(ResumeOnBoard)}, persist-checkpoint={Fmt(PersistCheckpoint)}, " +
-                        $"max-players={MaxPlayers.Value}, scale-item-spawns={Fmt(ScaleItemSpawns)} (x{ItemSpawnScale.Value:0.##}).");
+                        $"max-players={MaxPlayers.Value}, scale-item-spawns={Fmt(ScaleItemSpawns)} (x{ItemSpawnScale.Value:0.##}), " +
+                        $"debug-console={Fmt(EnableDebugConsole)}.");
         }
 
         private static string Fmt(ConfigEntry<bool> c)

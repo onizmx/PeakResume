@@ -101,7 +101,7 @@ dotnet build src/PeakResume/PeakResume.csproj -c Release -p:GameDir="D:\Games\St
 Launch PEAK once. Open `PEAK\BepInEx\LogOutput.log` and look for:
 
 ```
-PeakResume 1.1.0 loaded. Resume-on-death=ENABLED, resume-on-board=ENABLED, persist-checkpoint=ENABLED, max-players=10, scale-item-spawns=ENABLED (x1).
+PeakResume 1.2.0 loaded. Resume-on-death=ENABLED, resume-on-board=ENABLED, persist-checkpoint=ENABLED, max-players=10, scale-item-spawns=ENABLED (x1), debug-console=disabled.
 ```
 
 If the game **crashes at startup instead of reaching the menu**, you almost certainly used generic
@@ -132,6 +132,22 @@ Generated at `PEAK\BepInEx\config\com.onizmx.peakresume.cfg` after the first lau
 | `MaxPlayers` | 10 | Lobby size (vanilla hardcodes 4). Host-side; set before hosting. |
 | `ScaleItemSpawns` | on | More than 4 players → proportionally more items from luggage/spawners. |
 | `ItemSpawnScale` | 1.0 | Scaling strength: 1.0 = fully proportional (10 players → 2.5× items). |
+| `EnableDebugConsole` | off | Unlock PEAK's built-in developer console (F1). See below. |
+
+## Debug console (optional, off by default)
+
+PEAK ships with a working developer console — UI, command registry, hotkey page, the lot — but the
+single flag that lets F1 open it (`DebugUIHandler.AllowOpen`) is never set anywhere in the game, so
+it's unreachable in the retail build. Set `EnableDebugConsole = true` in the config and it opens.
+
+- **F1** toggles it. Type a command and press Enter; page tabs (Console / Hotkeys / Settings /
+  Network Stats / …) are the buttons along the top — the tab-cycle keys have no keyboard binding.
+- Commands are local to your own character: `GainFullStamina`, `InfiniteStamina`, `ClearAll`
+  (clear afflictions), `AddInjury`, `WarpToSpawn`, `Revive`, `Die`, `TestWin`, and the rest of
+  `Zorro.Core.CLI.ConsoleCommands`. The Hotkeys page binds a command to a key.
+- Handy for checking mechanics: e.g. if stamina won't refill, `ClearAll` shows whether afflictions
+  were capping your max stamina (max = 1 − sum of afflictions) rather than something being broken.
+- It's a dev tool on a live multiplayer game — expect to be able to break your own run with it.
 
 ## Limitations
 

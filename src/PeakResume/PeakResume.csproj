@@ -4,7 +4,7 @@
     <TargetFramework>netstandard2.1</TargetFramework>
     <AssemblyName>PeakResume</AssemblyName>
     <Product>PeakResume</Product>
-    <Version>1.0.0</Version>
+    <Version>1.2.0</Version>
     <LangVersion>latest</LangVersion>
     <Nullable>disable</Nullable>
     <!-- We reference the game's own assemblies, which aren't CLS/analyzer-clean. -->
@@ -65,6 +65,11 @@
     </Reference>
     <Reference Include="PhotonRealtime">
       <HintPath>$(ManagedDir)\PhotonRealtime.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <!-- DebugUIHandler (the developer console) lives in Zorro's core runtime, not Assembly-CSharp. -->
+    <Reference Include="Zorro.Core.Runtime">
+      <HintPath>$(ManagedDir)\Zorro.Core.Runtime.dll</HintPath>
       <Private>false</Private>
     </Reference>
   </ItemGroup>

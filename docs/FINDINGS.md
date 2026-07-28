@@ -221,3 +221,52 @@ Deliberately not scaled:
 - **Resume UX is the native Continue button** on the main menu — after a wipe, back out to the
   title screen and Continue will be there. (A future enhancement could offer resume directly from
   the end screen.)
+
+---
+
+## The developer console is shipped but gated (v1.2.0: `EnableDebugConsole`)
+
+PEAK's retail build contains the whole console: the UI (`Zorro.Core.CLI.DebugUIHandler`, a
+`UIDocument`-driven overlay with Console / Hotkeys / Settings / Network Stats pages), the command
+registry (`Zorro.Core.CLI.ConsoleCommands` in `Assembly-CSharp` — ~100 `[ConsoleCommand]` methods
+including `Character.GainFullStamina`, `InfiniteStamina`, `LockStatuses`,
+`CharacterAfflictions.ClearAll`, `WarpToSpawn`, `TestWin`), and the open hotkey
+(`InputForZorroCore.Open` = input action `OpenDebugMenu`, fallback `KeyCode.F1`).
+
+What blocks it is one line in `DebugUIHandler.Update()`:
+
+```csharp
+if (!IsOpened) { if (AllowOpen) Show(); }
+```
+
+`public static bool AllowOpen` appears in exactly **two** places across every shipped assembly
+(`Assembly-CSharp`, `-firstpass`, `pworld`, all `Zorro.*`): its declaration and this read. Nothing
+assigns it — no debug build define, no launch argument, no settings entry. So F1 does nothing.
+
+The mod sets it to `true` at plugin `Awake` when `EnableDebugConsole` is on. Notes:
+
+- **No Harmony patch needed** — it's a plain static field, read every frame, and never cleared, so
+  one assignment holds for the whole session.
+- **The handler always exists**: `GameHandler` calls `Singleton<DebugUIHandler>.Instance.RegisterPage(...)`
+  unconditionally at startup, so the object is in the scene; only the flag was missing.
+- Requires referencing `Zorro.Core.Runtime.dll` (the type is not in `Assembly-CSharp`).
+- Local-only: console commands run on `Character.localCharacter`. Nothing is broadcast, and other
+  players need neither the mod nor the flag.
+
+### Aside: why hanging on a piton may look like it doesn't restore stamina
+
+Reading this path answered a play question, so it's worth recording. Hanging **does** enable regen —
+`Character.CanRegenStamina()` returns true whenever `data.currentClimbHandle` is set — but:
+
+- Regen is `Time.fixedDeltaTime * 0.2f`, i.e. **0.2/s — identical to resting on the ground**. A
+  piton buys you a place to rest mid-wall, not a faster refill.
+- `GetMaxStamina()` is `max(1 - afflictions.statusSum, 0)`. With injury/hunger/cold/drowsy stacked,
+  the white bar has nowhere to grow, so it reads as "regen is broken". (`ClearAll` in the console
+  distinguishes the two instantly.)
+- `CharacterClimbing.HandleClimbHandle()` lerps `handleOffset` toward the movement input and calls
+  `CancelHandle()` once it exceeds 0.3 — about **0.35 s of held movement input** and you let go and
+  transition to wall climbing, which *drains* stamina. Rest with the stick centred.
+- Only `currentStamina` regenerates; `extraStamina` (campfire morale boost) does not.
+- `ShittyPiton` starts cracking after a random 1–5 s of hang time and breaks after 4 cracks.
+
+None of this is affected by any PeakResume patch.
