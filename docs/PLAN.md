@@ -55,6 +55,16 @@ Sanity:
 - [ ] Optional: offer resume directly from the end screen instead of via main menu
 - [ ] Package for Thunderstore-style manifest if wanted (currently local-only, which is the point)
 
+## Phase 5 — Bigger parties (v1.1.0) ✅ (built, not yet play-tested)
+- [x] `MaxPlayers` config (default 10): postfix on `NetworkingUtilities.MAX_PLAYERS` getter — covers
+  both the Photon room cap and the Steam lobby size; host-only, clients can be vanilla
+- [x] Audited every 4-player assumption in the decompile (spawn points, end screen, cutscene, voice
+  mixers, pause menu) — all guarded/modulo, cosmetic-only past 4 (see FINDINGS.md)
+- [x] `ScaleItemSpawns` + `ItemSpawnScale` configs: postfix on `Spawner.GetSpawnSpots` appends offset
+  spot clones past 4 players — covers Luggage/RespawnChest/ground spawners, flows through native
+  spawn tracking so quicksave resume restores scaled items
+- [ ] Play-test: host a 5+ lobby, verify item counts, wipe → board → resume with scaled items intact
+
 ## How to build
 
 ```
