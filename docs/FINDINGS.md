@@ -224,7 +224,7 @@ Deliberately not scaled:
 
 ---
 
-## The developer console is shipped but gated (v1.2.0: `EnableDebugConsole`)
+## The developer console is shipped but gated (v1.2.0; always on since v1.5.0)
 
 PEAK's retail build contains the whole console: the UI (`Zorro.Core.CLI.DebugUIHandler`, a
 `UIDocument`-driven overlay with Console / Hotkeys / Settings / Network Stats pages), the command
@@ -243,10 +243,16 @@ if (!IsOpened) { if (AllowOpen) Show(); }
 (`Assembly-CSharp`, `-firstpass`, `pworld`, all `Zorro.*`): its declaration and this read. Nothing
 assigns it — no debug build define, no launch argument, no settings entry. So F1 does nothing.
 
-The mod sets it to `true` at plugin `Awake` when `EnableDebugConsole` is on. Notes:
+The mod sets it to `true` at plugin `Awake`. Notes:
 
 - **No Harmony patch needed** — it's a plain static field, read every frame, and never cleared, so
   one assignment holds for the whole session.
+- **No config option (since v1.5.0).** It shipped as `Debug/EnableDebugConsole`, default off, but
+  the flag is only read when you press F1 — an unopened console costs nothing, while gating it meant
+  editing the cfg and restarting the game just to reach it. `Awake` is the only place the value could
+  be read (the flag is set once, not polled), so a live toggle would have needed a `SettingChanged`
+  handler for a setting nobody wanted off. Removed instead. BepInEx leaves the old key in existing
+  cfg files as an orphaned entry; it's inert.
 - **The handler always exists**: `GameHandler` calls `Singleton<DebugUIHandler>.Instance.RegisterPage(...)`
   unconditionally at startup, so the object is in the scene; only the flag was missing.
 - Requires referencing `Zorro.Core.Runtime.dll` (the type is not in `Assembly-CSharp`).

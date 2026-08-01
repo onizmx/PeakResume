@@ -4,7 +4,7 @@
     <TargetFramework>netstandard2.1</TargetFramework>
     <AssemblyName>PeakResume</AssemblyName>
     <Product>PeakResume</Product>
-    <Version>1.4.0</Version>
+    <Version>1.5.0</Version>
     <LangVersion>latest</LangVersion>
     <Nullable>disable</Nullable>
     <!-- We reference the game's own assemblies, which aren't CLS/analyzer-clean. -->

@@ -66,8 +66,10 @@ Sanity:
 - [ ] Play-test: host a 5+ lobby, verify item counts, wipe → board → resume with scaled items intact
 
 ## Phase 6 — Quality of life (v1.2.0 / v1.3.0) ✅ (built, not yet play-tested)
-- [x] `EnableDebugConsole` (default off): flip `DebugUIHandler.AllowOpen` at load — the game ships
-  the whole console but never sets that flag, so F1 does nothing in retail (see FINDINGS.md)
+- [x] Debug console: flip `DebugUIHandler.AllowOpen` at load — the game ships the whole console but
+  never sets that flag, so F1 does nothing in retail (see FINDINGS.md). Shipped in 1.2.0 behind
+  `EnableDebugConsole` (default off); made unconditional in 1.5.0 — the config gate only meant a
+  game restart to reach a UI that never shows unless you press F1
 - [x] `FullHealOnLight` (default on): prefix on `Campfire.Light_Rpc` clears every status/affliction
   and refills stamina for the whole party; host pushes it via `RPCA_Revive` /
   `RPC_ApplyStatusesFromFloatArray` / `MoraleBoost` so unmodded clients are healed too

@@ -37,6 +37,9 @@ Since 1.3.0, campfires actually restore you:
   revives — statue, revive chest, skeleton, base camp respawn, and the resume spawn — so you get up
   already halfway to passing out. That penalty is dropped and the bar is filled.
 
+And since 1.5.0, PEAK's own **developer console is unlocked on F1** — it ships in the retail build
+but the game never sets the one flag that opens it. See [Debug console](#debug-console-always-on-f1).
+
 Solo works too — resume from the main-menu **Continue** button, or just board again.
 
 No world-seed math, no manual teleporting, no network-ordering hacks — that's why it doesn't crash
@@ -112,7 +115,7 @@ dotnet build src/PeakResume/PeakResume.csproj -c Release -p:GameDir="D:\Games\St
 Launch PEAK once. Open `PEAK\BepInEx\LogOutput.log` and look for:
 
 ```
-PeakResume 1.4.0 loaded. Resume-on-death=ENABLED, resume-on-board=ENABLED, persist-checkpoint=ENABLED, max-players=10, scale-item-spawns=ENABLED (x1), campfire-full-heal=ENABLED, revive-full-heal=ENABLED, debug-console=disabled.
+PeakResume 1.5.0 loaded. Resume-on-death=ENABLED, resume-on-board=ENABLED, persist-checkpoint=ENABLED, max-players=10, scale-item-spawns=ENABLED (x1), campfire-full-heal=ENABLED, revive-full-heal=ENABLED, debug-console=ENABLED (F1).
 ```
 
 If the game **crashes at startup instead of reaching the menu**, you almost certainly used generic
@@ -145,13 +148,15 @@ Generated at `PEAK\BepInEx\config\com.onizmx.peakresume.cfg` after the first lau
 | `ItemSpawnScale` | 1.0 | Scaling strength: 1.0 = fully proportional (10 players → 2.5× items). |
 | `FullHealOnLight` | on | Lighting a campfire fully heals the whole party (see above). |
 | `FullHealOnRevive` | on | Revives skip the vanilla Curse/Hunger penalty and refill stamina. |
-| `EnableDebugConsole` | off | Unlock PEAK's built-in developer console (F1). See below. |
 
-## Debug console (optional, off by default)
+The debug console (below) has no setting — it's always available on F1.
+
+## Debug console (always on, F1)
 
 PEAK ships with a working developer console — UI, command registry, hotkey page, the lot — but the
 single flag that lets F1 open it (`DebugUIHandler.AllowOpen`) is never set anywhere in the game, so
-it's unreachable in the retail build. Set `EnableDebugConsole = true` in the config and it opens.
+it's unreachable in the retail build. The mod sets it at startup, every session, no config needed:
+nothing appears unless you actually press F1, so there's nothing to gate.
 
 - **F1** toggles it. Type a command and press Enter; page tabs (Console / Hotkeys / Settings /
   Network Stats / …) are the buttons along the top — the tab-cycle keys have no keyboard binding.
